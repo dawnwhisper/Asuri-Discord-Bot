@@ -1,5 +1,6 @@
 import { InteractionResponseType, InteractionResponseFlags } from 'discord-interactions';
-import { DiscordRequest, isChallengeChannel } from '../utils.js'; // Import isChallengeChannel
+import { DiscordRequest, isChallengeChannel } from '../utils.js';
+import 'dotenv/config'; // Import dotenv to access APP_ID
 
 export const solved = {
     name: 'solved',
@@ -10,6 +11,7 @@ export const solved = {
         const guildId = req.body.guild_id;
         const channelId = req.body.channel_id;
         const member = req.body.member; // For logging or confirmation message
+        const appId = process.env.APP_ID; // Get bot's App ID
 
         // This command must be run in a server channel
         if (!guildId) {
@@ -41,6 +43,36 @@ export const solved = {
                 });
             }
 
+            // --- Fetch Contributors from Pinned Message ---
+            let contributorsString = '';
+            try {
+                const pinnedMessages = await DiscordRequest(`/channels/${channelId}/pins`, { method: 'GET' });
+                let welcomeMessageEmbed = null;
+
+                if (pinnedMessages && Array.isArray(pinnedMessages)) {
+                    for (const pinnedMsg of pinnedMessages) {
+                        // Find the message pinned by our bot with the specific embed structure
+                        if (pinnedMsg.author.id === appId && pinnedMsg.embeds && pinnedMsg.embeds.length > 0 && pinnedMsg.embeds[0].title?.startsWith('欢迎来到题目')) {
+                            welcomeMessageEmbed = pinnedMsg.embeds[0];
+                            break;
+                        }
+                    }
+                }
+
+                if (welcomeMessageEmbed) {
+                    const contributorField = welcomeMessageEmbed.fields?.find(field => field.name === '当前贡献者名单');
+                    if (contributorField && contributorField.value !== '无') {
+                        contributorsString = contributorField.value; // Get the list like "xxx、xxx"
+                    }
+                } else {
+                    console.warn(`[solved] Could not find the pinned welcome message in channel ${channelId} to extract contributors.`);
+                }
+            } catch (pinError) {
+                console.error(`[solved] Error fetching or parsing pinned messages in channel ${channelId}:`, pinError);
+                // Proceed without contributor list if fetching fails
+            }
+            // --- End Fetch Contributors ---
+
             // 3. Construct the new name
             const originalName = currentChannel.name;
             let newName = `solved-${originalName}`;
@@ -66,8 +98,6 @@ export const solved = {
             // 4. Modify the channel using PATCH request
             const updatedChannelData = {
                 name: newName,
-                // Optional: You could also modify the topic here if desired, e.g., remove [CHALLENGE]
-                // topic: currentChannel.topic.replace('[CHALLENGE]', '[SOLVED]').trim(),
             };
 
             await DiscordRequest(`/channels/${channelId}`, {
@@ -76,11 +106,16 @@ export const solved = {
             });
 
             // 5. Send confirmation message
+            let description = `🎉 恭喜！题目「${originalName}」已被 <@${member.user.id}> 标记为解出！。`;
+            // Append contributor thank you message if contributors were found
+            if (contributorsString) {
+                description += `\n\n感谢以下成员的付出：${contributorsString}`;
+            }
+
             const confirmationEmbed = {
                 color: 0x9C27B0, // Purple color for solved
                 title: '🏆 题目已解决',
-                // Updated description format
-                description: `🎉 恭喜！题目「${originalName}」已被 <@${member.user.id}> 标记为解出！。`,
+                description: description, // Use the combined description
                 timestamp: new Date().toISOString(),
             };
 

@@ -1,15 +1,21 @@
 import 'dotenv/config';
 import express from 'express';
 import {
-    InteractionResponseType,
-    InteractionType,
-    verifyKeyMiddleware,
+  InteractionType,
+  InteractionResponseType,
+  InteractionResponseFlags,
+  verifyKeyMiddleware,
 } from 'discord-interactions';
-import { DiscordRequest } from './utils.js';
-import { getShuffledOptions, getResult } from './game.js';
+import { DiscordRequest, isChallengeChannel } from './utils.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// Import contributor interaction handlers
+import {
+    handleViewContributorsInfo,
+    handleAddContributor,
+    handleCancelContribution
+} from './interactions/contributors.js';
 
 // Determine __dirname equivalent in ES module scope
 const __filename = fileURLToPath(import.meta.url);
@@ -25,20 +31,32 @@ const activeGames = {};
 // Load commands dynamically
 const commands = {};
 const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    // Use dynamic import for ES modules
-    const commandModule = await import(filePath);
-    // Assuming each command file exports an object with name and execute properties
-    // Adjust based on your actual export structure (e.g., default export)
-    const commandName = Object.keys(commandModule)[0]; // Get the exported variable name
-    if (commandModule[commandName] && commandModule[commandName].name && commandModule[commandName].execute) {
-        commands[commandModule[commandName].name] = commandModule[commandName];
-    } else {
-        console.warn(`[WARNING] The command at ${filePath} is missing a required "name" or "execute" property.`);
+// Ensure commands directory exists
+if (fs.existsSync(commandsPath)) {
+    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        try {
+            const commandModule = await import(filePath);
+            const commandName = Object.keys(commandModule)[0];
+            if (commandModule[commandName] && commandModule[commandName].name && commandModule[commandName].execute) {
+                commands[commandModule[commandName].name] = commandModule[commandName];
+            } else {
+                 // Check for discord.js style command export
+                 if (commandModule.default && commandModule.default.data && commandModule.default.execute) {
+                     commands[commandModule.default.data.name] = commandModule.default;
+                 } else if (commandModule[commandName] && commandModule[commandName].data && commandModule[commandName].execute) {
+                     commands[commandModule[commandName].data.name] = commandModule[commandName];
+                 } else {
+                    console.warn(`[WARNING] The command at ${filePath} is missing a required "name"/"data" or "execute" property.`);
+                 }
+            }
+        } catch (error) {
+            console.error(`Error loading command from ${filePath}:`, error);
+        }
     }
+} else {
+    console.warn(`Commands directory not found at ${commandsPath}`);
 }
 
 /**
@@ -46,57 +64,98 @@ for (const file of commandFiles) {
  * Parse request body and verifies incoming requests using discord-interactions package
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-    // Interaction id, type and data
-    const { type, data } = req.body;
+  const { type, id, data, member, channel_id, message, token } = req.body;
 
-    /**
-     * Handle verification requests
-     */
-    if (type === InteractionType.PING) {
-        return res.send({ type: InteractionResponseType.PONG });
+  /**
+   * Handle verification requests
+   */
+  if (type === InteractionType.PING) {
+    return res.send({ type: InteractionResponseType.PONG });
+  }
+
+  /**
+   * Handle slash command requests
+   */
+  if (type === InteractionType.APPLICATION_COMMAND) {
+    const { name } = data;
+    const command = commands[name];
+
+    if (!command) {
+      console.error(`Unknown command: ${name}`);
+      return res.status(400).json({ error: 'Unknown command' });
     }
 
-    /**
-     * Handle slash command requests
-     * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
-     */
-    if (type === InteractionType.APPLICATION_COMMAND) {
-        const { name } = data;
+    try {
+      await command.execute(req, res);
+    } catch (error) {
+      console.error(`Error executing command ${name}:`, error);
+      if (!res.headersSent) {
+         try {
+             await res.status(500).send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: { content: '执行命令时出错。', flags: InteractionResponseFlags.EPHEMERAL }
+             });
+         } catch (sendError) {
+             console.error("Failed to send error response:", sendError);
+         }
+      }
+    }
+    return;
+  }
 
-        const command = commands[name];
+  /**
+   * Handle Message Component interactions (Buttons!)
+   */
+  if (type === InteractionType.MESSAGE_COMPONENT) {
+    const { custom_id } = data;
+    const userId = member?.user?.id;
+    const appId = process.env.APP_ID;
 
-        if (!command) {
-            console.error(`Unknown command: ${name}`);
-            return res.status(400).json({ error: 'Unknown command' });
+    if (!userId || !appId || !channel_id || !token) {
+        console.error('Missing essential data for MESSAGE_COMPONENT interaction:', { userId, appId, channel_id, token: !!token });
+        if (!res.headersSent) {
+            return res.status(400).send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: { content: '交互数据不完整，无法处理。', flags: InteractionResponseFlags.EPHEMERAL }
+            });
         }
-
-        try {
-            await command.execute(req, res);
-        } catch (error) {
-            console.error(`Error executing command ${name}:`, error);
-            // Send a generic error response or a more specific one if possible
-            // Ensure a response is sent, otherwise the interaction will fail
-            if (!res.headersSent) {
-                 return res.status(500).send({ 
-                        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                        data: { content: 'Something went wrong while executing the command.' }
-                 });
-            }
-        }
-        return; // Explicitly return after handling the command or error
+        return;
     }
 
-    // ... (Keep other interaction type handlers like BUTTON, SELECT_MENU, MODAL if they exist or will be added later)
+    console.log(`[Interaction] Button clicked: ${custom_id} by User: ${userId} in Channel: ${channel_id}`);
 
-    console.error('Unknown interaction type', type);
-    // Ensure a response is sent for unhandled types too
+    if (custom_id === 'view_contributors_info') {
+        return await handleViewContributorsInfo(req, res, channel_id);
+    }
+
+    if (custom_id === 'add_contributor') {
+        return await handleAddContributor(req, res, channel_id, userId, token, appId);
+    }
+
+    if (custom_id === 'cancel_contribution') {
+        return await handleCancelContribution(req, res);
+    }
+
+    console.warn('Unknown component interaction custom_id:', custom_id);
     if (!res.headersSent) {
-        return res.status(400).json({ error: 'Unknown interaction type' });
+        return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '未知的按钮交互。',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
     }
+    return;
+  }
+
+  console.error('Unknown interaction type', type);
+  if (!res.headersSent) {
+    return res.status(400).json({ error: 'Unknown interaction type' });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log('Listening on port', PORT);
-    // Optional: Log loaded commands
-    console.log(`Loaded commands: ${Object.keys(commands).join(', ')}`);
+  console.log('Listening on port', PORT);
+  console.log(`Loaded commands: ${Object.keys(commands).join(', ')}`);
 });
