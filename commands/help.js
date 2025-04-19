@@ -77,7 +77,7 @@ export const help = {
                 fields: availableCommands.map(cmd => ({
                     name: `/${cmd.name}`,
                     value: cmd.description || '无描述',
-                    inline: false,
+                    inline: true,
                 })),
                 timestamp: new Date().toISOString(),
                 footer: { text: footerText, icon_url: footerIcon },

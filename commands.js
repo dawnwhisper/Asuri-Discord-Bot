@@ -49,11 +49,45 @@ const HELP_COMMAND = {
     ]
 };
 
+// New Challenge command definition
+const NEWCHALLENGE_COMMAND = {
+    name: 'newchallenge',
+    description: '在当前分类下创建一个新的题目频道。',
+    type: 1, // CHAT_INPUT
+    options: [
+        {
+            name: 'name',
+            description: '新题目的名称 (将作为频道名)',
+            type: 3, // STRING
+            required: true,
+        },
+    ],
+    integration_types: [0], // Guild install only
+    contexts: [0], // Guild context only
+};
+
+// Solved command definition
+const SOLVED_COMMAND = {
+    name: 'solved',
+    description: '将当前题目频道标记为已解决并重命名。',
+    type: 1, // CHAT_INPUT
+    integration_types: [0], // Guild install only
+    contexts: [0], // Guild context only
+    // No options needed for this command
+};
+
 
 // --- Export and Installation ---
 
 // Array containing all command definitions
-export const ALL_COMMANDS = [TEST_COMMAND, PING_COMMAND, INFO_COMMAND, HELP_COMMAND]; // Add HELP_COMMAND here
+export const ALL_COMMANDS = [
+    TEST_COMMAND,
+    PING_COMMAND,
+    INFO_COMMAND,
+    HELP_COMMAND,
+    NEWCHALLENGE_COMMAND,
+    SOLVED_COMMAND // Add the new command here
+];
 
 // Function to install commands (usually called via 'node commands.js')
 async function installCommands() {

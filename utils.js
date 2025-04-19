@@ -160,7 +160,19 @@ export async function InstallGlobalCommands(appId, commands) {
     }
 }
 
-// ... getRandomEmoji, capitalize ...
+// --- Helper Functions ---
+
+/**
+ * Checks if a Discord channel object is a challenge channel based on its topic.
+ * @param {object} channel - The Discord channel object (needs 'topic' property).
+ * @returns {boolean} True if the channel topic contains "[CHALLENGE]", false otherwise.
+ */
+export function isChallengeChannel(channel) {
+  // Check if channel exists and has a topic property which is a string
+  return channel && typeof channel.topic === 'string' && channel.topic.includes('[CHALLENGE]');
+}
+
+// Simple method that returns a random emoji from list
 export function getRandomEmoji() {
     const emojiList = ['😭','😄','😌','🤓','😎','😤','🤖','😶‍🌫️','🌏','📸','💿','👋','🌊','✨'];
     return emojiList[Math.floor(Math.random() * emojiList.length)];
