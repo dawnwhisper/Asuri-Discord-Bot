@@ -3,7 +3,7 @@ import { getRandomEmoji } from '../utils.js';
 
 export const test = {
     name: 'test',
-    description: 'Basic test command',
+    description: '基础测试指令',
     execute: async (req, res) => {
         // Send a message into the channel where command was triggered from
         return res.send({
