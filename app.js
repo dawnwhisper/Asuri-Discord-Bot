@@ -25,6 +25,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 // Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
+// Get status URL from environment variables
+const STATUS_URL = process.env.STATUS_URL;
 // To keep track of our active games
 const activeGames = {};
 
@@ -58,6 +60,25 @@ if (fs.existsSync(commandsPath)) {
 } else {
     console.warn(`Commands directory not found at ${commandsPath}`);
 }
+
+// --- Heartbeat Function ---
+async function sendHeartbeat() {
+    if (!STATUS_URL) {
+        // console.log('STATUS_URL not defined, skipping heartbeat.'); // Optional: Log if URL is not set
+        return;
+    }
+    try {
+        const response = await fetch(STATUS_URL);
+        if (response.ok) {
+            // console.log(`Heartbeat sent successfully at ${new Date().toISOString()}`); // Optional: Log success
+        } else {
+            console.warn(`Heartbeat failed with status: ${response.status} at ${new Date().toISOString()}`);
+        }
+    } catch (error) {
+        console.error(`Error sending heartbeat at ${new Date().toISOString()}:`, error.message);
+    }
+}
+// --- End Heartbeat Function ---
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
@@ -158,4 +179,17 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
   console.log(`Loaded commands: ${Object.keys(commands).join(', ')}`);
+
+  // --- Start Heartbeat ---
+  if (STATUS_URL) {
+      console.log(`Heartbeat configured for URL: ${STATUS_URL}`);
+      // Send initial heartbeat immediately
+      sendHeartbeat();
+      // Then send every 60 seconds
+      setInterval(sendHeartbeat, 60 * 1000);
+      console.log('Heartbeat service started.');
+  } else {
+      console.log('Heartbeat service not started (STATUS_URL not configured).');
+  }
+  // --- End Start Heartbeat ---
 });
