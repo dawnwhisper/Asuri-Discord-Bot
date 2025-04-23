@@ -76,6 +76,63 @@ const SOLVED_COMMAND = {
     // No options needed for this command
 };
 
+// Chat command definition with subcommands
+const CHAT_COMMAND = {
+    name: 'chat',
+    description: '与 AI 进行对话或配置 AI。', // Updated description
+    type: 1, // CHAT_INPUT
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+    options: [
+        { // Default chat interaction (now a subcommand)
+            name: 'ask', // Renamed from implicit root command
+            description: '与 AI 进行对话（可附带文件）。',
+            type: 1, // SUB_COMMAND
+            options: [ // Options moved under the subcommand
+                {
+                    name: 'prompt',
+                    description: '您想对 AI 说的话',
+                    type: 3, // STRING
+                    required: true,
+                },
+                {
+                    name: 'attachment',
+                    description: '上传文件进行提问 (可选)',
+                    type: 11, // ATTACHMENT
+                    required: false,
+                }
+            ],
+        },
+        { // Config subcommand
+            name: 'config',
+            description: '配置聊天 AI 的提供商和模型。',
+            type: 1, // SUB_COMMAND
+            // No options needed for the config subcommand itself
+        }
+    ],
+};
+
+// Money command definition with subcommands
+const MONEY_COMMAND = {
+    name: 'money',
+    description: '查询 AI 调用费用。', // Updated description
+    type: 1, // CHAT_INPUT
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+    options: [
+        {
+            name: 'check',
+            description: '查询您自己已产生的 AI 调用费用。',
+            type: 1, // SUB_COMMAND
+        },
+        {
+            name: 'all',
+            description: '查询所有用户的 AI 调用费用汇总 (仅部分用户可见)。', // Added description about visibility
+            type: 1, // SUB_COMMAND
+            // Add permission checks later if needed
+        }
+    ],
+};
 
 // --- Export and Installation ---
 
@@ -86,7 +143,9 @@ export const ALL_COMMANDS = [
     INFO_COMMAND,
     HELP_COMMAND,
     NEWCHALLENGE_COMMAND,
-    SOLVED_COMMAND // Add the new command here
+    SOLVED_COMMAND,
+    CHAT_COMMAND,
+    MONEY_COMMAND, // Add the money command
 ];
 
 // Function to install commands (usually called via 'node commands.js')

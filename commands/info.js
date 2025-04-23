@@ -69,7 +69,6 @@ export const info = {
             const formattedUptime = formatUptime(uptimeSeconds);
 
             // Construct invite link (basic permissions for slash commands)
-            const inviteLink = `https://discord.com/oauth2/authorize?client_id=${applicationId}&scope=bot%20applications.commands&permissions=0`;
             const githubLink = "https://github.com/dawnwhisper/Asuri-Discord-Bot";
 
             // Build the embed message
@@ -87,7 +86,6 @@ export const info = {
                     { name: '📦 Node.js 版本', value: process.version, inline: true },
                     // Placeholder for server count - requires specific intents/logic
                     // { name: '🌐 服务器数量', value: 'N/A', inline: true },
-                    // { name: '🔗 邀请链接', value: `[点击这里邀请我](${inviteLink})`, inline: false },
                     // Optional: Add a link to your bot's support server or GitHub repository
                     // { name: '❓ 支持服务器', value: '[加入](your-invite-link)', inline: true },
                     { name: '💻 GITHUB', value: `[查看源码](${githubLink})`, inline: true },

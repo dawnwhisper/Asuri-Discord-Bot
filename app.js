@@ -5,6 +5,7 @@ import {
   InteractionResponseType,
   InteractionResponseFlags,
   verifyKeyMiddleware,
+  MessageComponentTypes,
 } from 'discord-interactions';
 import { DiscordRequest, isChallengeChannel } from './utils.js';
 import fs from 'fs';
@@ -16,6 +17,12 @@ import {
     handleAddContributor,
     handleCancelContribution
 } from './interactions/contributors.js';
+// Keep import for now, might be used by other modals
+import { handleChatModalSubmit } from './interactions/chatHandler.js';
+// Import config for select menu options
+import { availableProviders } from './config/llmConfig.js';
+// Update imports from chat.js
+import { handleConfigSelect, handleCancelConfig } from './commands/chat.js';
 
 // Determine __dirname equivalent in ES module scope
 const __filename = fileURLToPath(import.meta.url);
@@ -86,6 +93,7 @@ async function sendHeartbeat() {
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   const { type, id, data, member, channel_id, message, token } = req.body;
+  const user = member?.user ?? req.body.user; // Get user info correctly for guild/DM
 
   /**
    * Handle verification requests
@@ -99,6 +107,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
    */
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
+    // Check if it's a subcommand interaction by looking at options[0].type
+    const isSubcommand = data.options?.[0]?.type === 1 || data.options?.[0]?.type === 2; // 1: SUB_COMMAND, 2: SUB_COMMAND_GROUP
+
     const command = commands[name];
 
     if (!command) {
@@ -107,6 +118,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     }
 
     try {
+      // The execute function in chat.js now handles subcommand routing internally
       await command.execute(req, res);
     } catch (error) {
       console.error(`Error executing command ${name}:`, error);
@@ -125,11 +137,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   }
 
   /**
-   * Handle Message Component interactions (Buttons!)
+   * Handle Message Component interactions (Buttons, Select Menus)
    */
   if (type === InteractionType.MESSAGE_COMPONENT) {
     const { custom_id } = data;
-    const userId = member?.user?.id;
+    const userId = member?.user?.id ?? user?.id; // Ensure userId is available
     const appId = process.env.APP_ID;
 
     if (!userId || !appId || !channel_id || !token) {
@@ -145,17 +157,42 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
     console.log(`[Interaction] Button clicked: ${custom_id} by User: ${userId} in Channel: ${channel_id}`);
 
-    if (custom_id === 'view_contributors_info') {
-        return await handleViewContributorsInfo(req, res, channel_id);
+    // --- Handler for Contributor Buttons ---
+    if (custom_id === 'view_contributors_info' || custom_id === 'add_contributor' || custom_id === 'cancel_contribution') {
+        if (!userId || !appId || !channel_id || !token) {
+             console.error('Missing essential data for contributor interaction:', { userId, appId, channel_id, token: !!token });
+             return res.status(400).send({
+                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                 data: { content: '交互数据不完整，无法处理。', flags: InteractionResponseFlags.EPHEMERAL }
+             });
+        }
+        console.log(`[Interaction] Contributor Button clicked: ${custom_id} by User: ${userId} in Channel: ${channel_id}`);
+        if (custom_id === 'view_contributors_info') {
+            return await handleViewContributorsInfo(req, res, channel_id);
+        }
+        if (custom_id === 'add_contributor') {
+            return await handleAddContributor(req, res, channel_id, userId, token, appId);
+        }
+        if (custom_id === 'cancel_contribution') {
+            return await handleCancelContribution(req, res);
+        }
+        return;
     }
+    // --- End Contributor Buttons ---
 
-    if (custom_id === 'add_contributor') {
-        return await handleAddContributor(req, res, channel_id, userId, token, appId);
+    // --- Handler for Combined LLM Config Selection Menu ---
+    if (custom_id === 'select_llm_config') { // Use the new custom ID
+        // Handles selection and shows final public confirmation
+        return await handleConfigSelect(req, res, data, custom_id);
     }
+    // --- End Combined LLM Config Selection Menu ---
 
-    if (custom_id === 'cancel_contribution') {
-        return await handleCancelContribution(req, res);
+    // --- Handler for LLM Config Cancel Button ---
+    if (custom_id === 'cancel_llm_config') {
+        // Cancels the config process
+        return await handleCancelConfig(req, res);
     }
+    // --- End LLM Config Cancel Button ---
 
     console.warn('Unknown component interaction custom_id:', custom_id);
     if (!res.headersSent) {
@@ -163,6 +200,26 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: '未知的按钮交互。',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+    return;
+  }
+
+  /**
+   * Handle Modal Submit interactions
+   */
+  if (type === InteractionType.MODAL_SUBMIT) {
+    const { custom_id } = data;
+    const appId = process.env.APP_ID;
+
+    console.warn('未知的 modal submit custom_id:', custom_id);
+    if (!res.headersSent) {
+        return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '未知的模态框提交。',
                 flags: InteractionResponseFlags.EPHEMERAL,
             },
         });

@@ -1,4 +1,9 @@
 import 'dotenv/config';
+import fetch from 'node-fetch';
+import { verifyKey } from 'discord-interactions';
+import fs from 'fs/promises'; // Use promises API for async operations
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Function to introduce a delay
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -146,7 +151,83 @@ export async function DiscordRequest(endpoint, options, retries = 3) {
     throw new Error(`DiscordRequest failed after ${retries} attempts for endpoint: ${endpoint}`);
 }
 
-// ... rest of the file (InstallGlobalCommands, getRandomEmoji, capitalize) ...
+// --- Cost Tracking Utilities ---
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const costsDir = path.join(__dirname, 'data', 'user_costs');
+
+// Ensure the costs directory exists
+async function ensureCostsDir() {
+    try {
+        await fs.mkdir(costsDir, { recursive: true });
+    } catch (error) {
+        if (error.code !== 'EEXIST') {
+            console.error("Failed to create costs directory:", error);
+            throw error; // Re-throw if it's not just directory exists error
+        }
+    }
+}
+
+/**
+ * Gets the total cost for a given user ID.
+ * @param {string} userId - The Discord user ID.
+ * @returns {Promise<number>} The total cost in Yuan (元), defaults to 0.
+ */
+export async function getUserCost(userId) {
+    await ensureCostsDir(); // Ensure directory exists before reading
+    const filePath = path.join(costsDir, `${userId}.json`);
+    try {
+        const data = await fs.readFile(filePath, 'utf-8');
+        const costData = JSON.parse(data);
+        return costData.totalCostYuan || 0;
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return 0; // File not found, user has no recorded cost yet
+        }
+        console.error(`Error reading cost file for user ${userId}:`, error);
+        return 0; // Return 0 on other errors to avoid breaking functionality
+    }
+}
+
+/**
+ * Updates the total cost for a given user ID by adding the cost of the latest API call.
+ * @param {string} userId - The Discord user ID.
+ * @param {number} costToAddYuan - The cost in Yuan (元) to add to the user's total.
+ */
+export async function updateUserCost(userId, costToAddYuan) {
+    if (!userId || typeof costToAddYuan !== 'number' || costToAddYuan <= 0) {
+        console.warn(`Invalid attempt to update cost for user ${userId} with amount ${costToAddYuan}`);
+        return;
+    }
+    await ensureCostsDir(); // Ensure directory exists before writing
+    const filePath = path.join(costsDir, `${userId}.json`);
+    try {
+        let currentCost = 0;
+        try {
+            const data = await fs.readFile(filePath, 'utf-8');
+            const costData = JSON.parse(data);
+            currentCost = costData.totalCostYuan || 0;
+        } catch (readError) {
+            if (readError.code !== 'ENOENT') {
+                console.error(`Error reading existing cost file for user ${userId} before update:`, readError);
+                // Decide if you want to proceed or stop. Let's proceed assuming 0 cost.
+            }
+        }
+
+        const newTotalCost = currentCost + costToAddYuan;
+        const newCostData = { totalCostYuan: newTotalCost };
+
+        await fs.writeFile(filePath, JSON.stringify(newCostData, null, 2), 'utf-8');
+        console.log(`Updated cost for user ${userId}: Added ${costToAddYuan.toFixed(6)}, New Total: ${newTotalCost.toFixed(6)}`);
+
+    } catch (error) {
+        console.error(`Error writing cost file for user ${userId}:`, error);
+    }
+}
+
+// --- End Cost Tracking Utilities ---
+
 // Make sure InstallGlobalCommands uses the updated DiscordRequest
 export async function InstallGlobalCommands(appId, commands) {
     const endpoint = `applications/${appId}/commands`;
