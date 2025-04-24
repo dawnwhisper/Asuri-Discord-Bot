@@ -1,7 +1,7 @@
 # Asuri Discord Bot
 
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.x-brightgreen.svg)](https://nodejs.org/)
-[![Version](https://img.shields.io/badge/version-v1.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-v1.3-blue.svg)]()
 
 Asuri Discord Bot 是一个为 CTF 团队设计的辅助机器人，集成了 LLM 对话、题目频道管理和费用跟踪等功能。
 
