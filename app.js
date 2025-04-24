@@ -17,8 +17,6 @@ import {
     handleAddContributor,
     handleCancelContribution
 } from './interactions/contributors.js';
-// Keep import for now, might be used by other modals
-import { handleChatModalSubmit } from './interactions/chatHandler.js';
 // Import config for select menu options
 import { availableProviders } from './config/llmConfig.js';
 // Update imports from chat.js

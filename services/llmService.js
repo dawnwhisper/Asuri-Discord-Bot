@@ -65,7 +65,7 @@ async function downloadTextAttachment(url, contentType, size) {
 
     // 2. Check content type
     // const isAllowedType = ALLOWED_TEXT_CONTENT_TYPES.some(prefix => contentType?.startsWith(prefix));
-    const isAllowedType = true; // 暂时禁用类型检查
+    const isAllowedType = true; // 注意: 暂时禁用类型检查以允许处理 CTF 相关文件
     if (!isAllowedType) {
         console.log(`Attachment content type (${contentType}) is not in the allowed list for download. Skipping content download.`);
         return { success: false, reason: 'non-text' };
@@ -96,7 +96,7 @@ async function downloadTextAttachment(url, contentType, size) {
     }
 }
 
-// --- API Call Functions (Modify return value) ---
+// --- API Call Functions ---
 
 async function callOpenAI(prompt, config) {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -189,35 +189,15 @@ async function callSiliconFlow(prompt, config) {
 }
 
 async function callGemini(prompt, config) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error("Gemini API key (GEMINI_API_KEY) not found in environment variables.");
-    }
-    console.log(`Calling Gemini model: ${config.model}`);
-    // TODO: Implement Gemini API call using fetch or Google AI SDK (@google/generative-ai)
-    // Example structure:
-    // const { GoogleGenerativeAI } = require("@google/generative-ai");
-    // const genAI = new GoogleGenerativeAI(apiKey);
-    // const model = genAI.getGenerativeModel({ model: config.model });
-    // const result = await model.generateContent(prompt);
-    // const response = await result.response;
-    // return { content: response.text(), usage: { prompt_tokens: ..., completion_tokens: ... } };
-    throw new Error("Gemini provider not yet implemented.");
+    console.warn("Gemini provider called but not implemented.");
+    // Return structure consistent with others, even for errors
+    return { content: "Gemini provider not yet implemented.", usage: null };
 }
 
 async function callCustomLLM(prompt, config) {
-    const apiKey = process.env[config.apiKeyEnv];
-    const endpoint = config.endpoint;
-    if (!apiKey || !endpoint) {
-        throw new Error(`Custom LLM endpoint (${config.endpoint}) or API key environment variable (${config.apiKeyEnv}) not configured.`);
-    }
-    console.log(`Calling Custom LLM endpoint: ${endpoint}`);
-    // TODO: Implement custom LLM API call using fetch
-    // Example structure:
-    // const response = await fetch(endpoint, { ... headers with apiKey ... body with prompt ... });
-    // const data = await response.json();
-    // return { content: data.response, usage: { prompt_tokens: ..., completion_tokens: ... } };
-    throw new Error("Custom LLM provider not yet implemented.");
+    console.warn("Custom LLM provider called but not implemented.");
+    // Return structure consistent with others, even for errors
+    return { content: "Custom LLM provider not yet implemented.", usage: null };
 }
 
 /**
@@ -301,14 +281,17 @@ export async function getLLMResponse(prompt, attachmentDetails = null) {
                 result = await callOpenAI(processedPrompt, activeSettings);
                 break;
             case 'gemini':
-                throw new Error("Gemini provider not yet implemented.");
+                result = await callGemini(processedPrompt, activeSettings); // Call the stub function
+                break;
             case 'custom':
-                result = await callCustomLLM(processedPrompt, activeSettings);
+                result = await callCustomLLM(processedPrompt, activeSettings); // Call the stub function
                 break;
             default:
-                throw new Error(`Unsupported LLM provider: "${provider}"`);
+                // Return error content in the standard structure
+                return { content: `Unsupported LLM provider: "${provider}"`, usage: null };
         }
-        return result; // Return the object { content, usage }
+        // Ensure result is always in the expected format
+        return result || { content: 'Provider returned undefined result.', usage: null };
     } catch (error) {
         console.error(`Error getting response from LLM provider "${provider}" (Model: ${model}):`, error);
         // Return error content, usage remains null

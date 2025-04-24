@@ -1,8 +1,8 @@
 {
-    "name": "discord-getting-started",
+    "name": "asuri-discord-bot",
     "private": true,
     "version": "1.0.0",
-    "description": "Discord example app",
+    "description": "Discord bot for Asuri CTF Team with LLM integration and utilities.",
     "main": "app.js",
     "type": "module",
     "engines": {
@@ -13,8 +13,14 @@
         "register": "node commands.js",
         "dev": "nodemon app.js"
     },
-    "author": "Shay DeWael",
-    "license": "MIT",
+    "author": "Dawn-whisper",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/dawnwhisper/Asuri-Discord-Bot.git"
+    },
+    "bugs": {
+        "url": "https://github.com/dawnwhisper/Asuri-Discord-Bot/issues"
+    },
     "dependencies": {
         "discord-interactions": "^4.0.0",
         "dotenv": "^16.0.3",
