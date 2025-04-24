@@ -1,0 +1,7 @@
+node_modules
+.env
+.DS_Store
+# User data and logs
+/data/
+/logs/
+yarn.lock
